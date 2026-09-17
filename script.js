@@ -1,184 +1,246 @@
-// --- ПЕРЕКЛЮЧЕНИЕ ТАБОВ ИНТЕРФЕЙСА ---
-document.querySelectorAll('.nav-btn').forEach(button => {
-    button.addEventListener('click', () => {
-        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-        
-        button.classList.add('active');
-        const activeTab = button.getAttribute('data-tab');
-        document.getElementById(activeTab).classList.add('active');
-        
-        // Пересчитываем размеры 3D-сцены при возврате на вкладку симуляции
-        if(activeTab === 'simulation' && window.onWindowResize) {
-            window.onWindowResize();
-        }
-    });
-});
+// --- ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ СЦЕНЫ THREE.JS ---
+let scene, camera, renderer, controls;
+let robotGroup; // Единая группа (сборка робота), куда монтируются детали
+let partsData = []; // Метаданные деталей для дерева компонентов
+let isPhysicsRunning = false;
+let clock = new THREE.Clock();
 
-// --- ИНИЦИАЛИЗАЦИЯ THREE.JS ДЛЯ 3D СБОРКИ ---
-let scene, camera, renderer;
-let robotParts = []; // Хранилище объектов робота на сцене
-let isSimulating = false;
-
-function init3D() {
-    const container = document.getElementById('canvas-container');
+function initCADCore() {
+    const container = document.getElementById('viewport-3d');
     if (!container) return;
 
-    // 1. Создание сцены
+    // 1. Создание 3D Сцены
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0d1117);
+    scene.background = new THREE.Color(0x0a0d12);
+    // Добавим легкий синий туман для глубины пространства
+    scene.fog = new THREE.FogExp2(0x0a0d12, 0.03);
 
-    // 2. Камера
-    camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(0, 5, 8);
-    camera.lookAt(0, 0, 0);
+    // 2. Настройка перспективной инженерной камеры
+    camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(4, 4, 6);
 
-    // 3. Рендерер
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    // 3. Высокоточный WebGL рендерер
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(renderer.domElement);
 
-    // 4. Освещение
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // 4. ОРБИТАЛЬНОЕ УПРАВЛЕНИЕ МЫШЬЮ (OrbitControls)
+    // Реализует полноценное вращение сцены, приближение скроллом и панорамирование
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; // Плавность торможения камеры
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.01; // Не позволяет камере уходить под землю
+
+    // 5. Окружающий свет и координатные направляющие
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(5, 10, 7);
-    scene.add(dirLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    directionalLight.position.set(10, 15, 10);
+    scene.add(directionalLight);
 
-    // Сетка земли (Grid Helper) для ориентирования инженера
-    const gridHelper = new THREE.GridHelper(10, 20, 0x007acc, 0x2e3b4e);
+    const pointLight = new THREE.PointLight(0x00e5ff, 0.6, 10);
+    pointLight.position.set(0, 3, 0);
+    scene.add(pointLight);
+
+    // Сетка земли (Industrial Grid)
+    const gridHelper = new THREE.GridHelper(20, 40, 0x222c3c, 0x161d28);
     scene.add(gridHelper);
 
-    // Простой цикл анимации
-    function animate() {
-        requestAnimationFrame(animate);
+    // Инициализируем пустую группу робота
+    robotGroup = new THREE.Group();
+    scene.add(robotGroup);
+
+    // Главный цикл рендеринга и анимации
+    function renderLoop() {
+        requestAnimationFrame(renderLoop);
         
-        // Если запущена симуляция робота — заставим детали слегка двигаться/вращаться
-        if (isSimulating && robotParts.length > 0) {
-            robotParts.forEach(part => {
-                part.position.x += Math.sin(Date.now() * 0.003) * 0.01;
+        // Обновляем трекер мыши
+        controls.update();
+
+        // Имитация физической работы кинематики робота
+        if (isPhysicsRunning && partsData.length > 0) {
+            const time = clock.getElapsedTime();
+            
+            // Заставим робота ехать по кругу, а модули функционировать
+            robotGroup.position.x = Math.sin(time * 0.5) * 1.5;
+            robotGroup.position.z = Math.cos(time * 0.5) * 1.5;
+            robotGroup.rotation.y = time * 0.5;
+
+            // Вращаем колеса внутри сборки
+            robotGroup.children.forEach(child => {
+                if (child.name.includes("Колесо")) {
+                    child.rotation.x += 0.05;
+                }
+                if (child.name.includes("Лидар")) {
+                    child.rotation.y += 0.1; // Вращение головки лидара
+                }
             });
+
+            // Обновление панели телеметрии данными в реальном времени
+            document.getElementById('val-coords').innerText = `${robotGroup.position.x.toFixed(2)}, 0.00, ${robotGroup.position.z.toFixed(2)}`;
+            document.getElementById('val-hz').innerText = `${Math.floor(440 + Math.random()*20)} Гц`;
         }
-        
+
         renderer.render(scene, camera);
     }
-    animate();
+    renderLoop();
 
-    // Адаптивность 3D-окна при изменении размеров экрана
-    window.onWindowResize = function() {
-        if (!container) return;
+    // Обработчик изменения размеров экрана
+    window.addEventListener('resize', () => {
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
-    }
-    window.addEventListener('resize', window.onWindowResize);
+    });
 }
 
-// --- ФУНКЦИИ СБОРКИ И РОБОТОТЕХНИКИ ---
+// --- СИСТЕМА ОПЕРАЦИЙ CAD (СПАВН И УДАЛЕНИЕ ДЕТАЛЕЙ) ---
 
-// Добавление 3D-деталей на сцену
-function addPart(type) {
+function spawnPart(type) {
     let geometry, material, mesh;
-    
+    const id = Date.now(); // Генерация уникального ID узла
+
     switch(type) {
         case 'chassis':
-            geometry = new THREE.BoxGeometry(3, 0.4, 2);
-            material = new THREE.MeshStandardMaterial({ color: 0x3e4c5e, roughness: 0.4 });
+            // Создаем жесткую несущую раму
+            geometry = new THREE.BoxGeometry(2, 0.2, 1.4);
+            material = new THREE.MeshStandardMaterial({ color: 0x2d3748, metalness: 0.8, roughness: 0.2 });
             mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(0, 0.2, 0);
-            mesh.name = "Шасси";
-            break;
-            
-        case 'wheel':
-            geometry = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 16);
-            material = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-            mesh = new THREE.Mesh(geometry, material);
-            mesh.rotation.z = Math.PI / 2;
-            // Рандомно раскидываем колеса в стороны шасси
-            mesh.position.set(Math.random() > 0.5 ? 1.6 : -1.6, 0.5, Math.random() > 0.5 ? 0.8 : -0.8);
-            mesh.name = "Колесо";
-            break;
-            
-        case 'sensor':
-            geometry = new THREE.BoxGeometry(0.3, 0.3, 0.6);
-            material = new THREE.MeshStandardMaterial({ color: 0x007acc });
-            mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(0, 0.6, 1);
-            mesh.name = "Датчик";
+            mesh.position.set(0, 0.1, 0);
+            mesh.name = `Шасси [ID: ${id.toString().slice(-4)}]`;
             break;
 
-        case 'manipulator':
-            geometry = new THREE.CylinderGeometry(0.1, 0.1, 1.2, 8);
-            material = new THREE.MeshStandardMaterial({ color: 0xe13434 });
+        case 'wheel':
+            // Цилиндр для колеса
+            geometry = new THREE.CylinderGeometry(0.4, 0.4, 0.25, 24);
+            material = new THREE.MeshStandardMaterial({ color: 0x1a202c, roughness: 0.7 });
             mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(0, 1, -0.5);
-            mesh.name = "Захват";
+            mesh.rotation.z = Math.PI / 2;
+            // Авто-размещение колес по углам
+            const offsetLeft = partsData.filter(p => p.type === 'wheel').length % 2 === 0 ? 1.1 : -1.1;
+            const offsetFront = partsData.filter(p => p.type === 'wheel').length < 2 ? 0.6 : -0.6;
+            mesh.position.set(offsetLeft, 0.4, offsetFront);
+            mesh.name = `Колесо [ID: ${id.toString().slice(-4)}]`;
+            break;
+
+        case 'lidar':
+            // Конструкция лазерного дальномера
+            const baseGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.2, 16);
+            const headGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.15, 16);
+            const matBase = new THREE.MeshStandardMaterial({ color: 0x007acc });
+            const matHead = new THREE.MeshStandardMaterial({ color: 0x00e5ff });
+            
+            const baseMesh = new THREE.Mesh(baseGeo, matBase);
+            const headMesh = new THREE.Mesh(headGeo, matHead);
+            headMesh.position.y = 0.15;
+            
+            mesh = new THREE.Group();
+            mesh.add(baseMesh);
+            mesh.add(headMesh);
+            mesh.position.set(0, 0.3, 0.5); // Ставим на переднюю часть рамы
+            mesh.name = `Лидар [ID: ${id.toString().slice(-4)}]`;
+            break;
+
+        case 'arm':
+            // Рука-манипулятор
+            geometry = new THREE.BoxGeometry(0.15, 1.0, 0.15);
+            material = new THREE.MeshStandardMaterial({ color: 0xff3d00 });
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(0, 0.7, -0.4);
+            mesh.name = `Манипулятор [ID: ${id.toString().slice(-4)}]`;
             break;
     }
 
     if (mesh) {
-        scene.add(mesh);
-        robotParts.push(mesh);
-        logTerminal(`[СБОРКА] Добавлен компонент: ${mesh.name}`);
+        mesh.userData = { customId: id }; // Запись ID в метаданные 3D объекта
+        robotGroup.add(mesh);
+        
+        // Сохраняем в массив данных
+        partsData.push({ id: id, type: type, name: mesh.name, ref: mesh });
+        
+        // Обновляем UI дерева компонентов
+        renderAssemblyTree();
+        printLog(`[CAD] Развернут узел: ${mesh.name}`);
     }
 }
 
-// Управление физической симуляцией (визуализация работы)
-function startSimulation() {
-    if(robotParts.length === 0) {
-        alert("Сначала добавьте детали на сцену!");
+// Удаление узла из дерева и 3D-сцены
+function deletePart(id) {
+    const index = partsData.findIndex(p => p.id === id);
+    if (index !== -1) {
+        const item = partsData[index];
+        robotGroup.remove(item.ref); // Удаляем из 3D мира
+        printLog(`[CAD] Демонтирован узел: ${item.name}`);
+        partsData.splice(index, 1);
+        renderAssemblyTree();
+    }
+}
+
+// Генератор HTML дерева сборки
+function renderAssemblyTree() {
+    const tree = document.getElementById('assembly-tree');
+    tree.innerHTML = '<li class="tree-root">📦 Робот_Сборка_1</li>';
+    
+    partsData.forEach(part => {
+        const li = document.createElement('li');
+        li.className = 'tree-item';
+        li.innerHTML = `<span>🔹 ${part.name}</span> <span class="delete-node" onclick="deletePart(${part.id})">×</span>`;
+        tree.appendChild(li);
+    });
+}
+
+// Очистка сцены
+function clearScene() {
+    partsData.forEach(part => robotGroup.remove(part.ref));
+    partsData = [];
+    robotGroup.position.set(0,0,0);
+    robotGroup.rotation.set(0,0,0);
+    isPhysicsRunning = false;
+    document.getElementById('sim-toggle-btn').innerText = "▶ Запустить физику";
+    document.getElementById('sim-toggle-btn').classList.remove('active');
+    renderAssemblyTree();
+    printLog("[SYS] Сцена полностью очищена. Сборка аннулирована.");
+}
+
+// --- УПРАВЛЕНИЕ СИМУЛЯЦИЕЙ И ФИЗИКОЙ ---
+function toggleSimulation() {
+    if (partsData.length === 0) {
+        alert("Невозможно запустить симуляцию пустого пространства. Добавьте хотя бы один узел робота.");
         return;
     }
-    isSimulating = !isSimulating;
-    const btn = document.querySelector('.trigger-test');
-    if (isSimulating) {
-        btn.innerText = "⏸️ Остановить симуляцию";
-        btn.style.backgroundColor = "#ef4444";
-        logTerminal("[СИМУЛЯЦИЯ] Двигатели запущены. Опрос датчиков активен.");
+    isPhysicsRunning = !isPhysicsRunning;
+    const btn = document.getElementById('sim-toggle-btn');
+    if (isPhysicsRunning) {
+        btn.innerText = "⏸ Остановить физику";
+        btn.classList.add('active');
+        printLog("[SIM] Физический движок запущен. Захват потока одометрии.");
     } else {
-        btn.innerText = "▶️ Запустить симуляцию";
-        btn.style.backgroundColor = "#10b981";
-        logTerminal("[СИМУЛЯЦИЯ] Работа приостановлена.");
+        btn.innerText = "▶ Запустить физику";
+        btn.classList.remove('active');
+        printLog("[SIM] Симуляция заморожена.");
     }
 }
 
-// Сброс сцены
-function resetScene() {
-    robotParts.forEach(part => scene.remove(part));
-    robotParts = [];
-    isSimulating = false;
-    const btn = document.querySelector('.trigger-test');
-    btn.innerText = "▶️ Запустить симуляцию";
-    btn.style.backgroundColor = "#10b981";
-    logTerminal("[ОЧИСТКА] Робот разобран. Сцена пуста.");
-}
-
-// --- ФУНКЦИОНАЛ ИМИТАЦИИ IDE (КОДИНГ) ---
-function compileCode() {
-    const consoleBox = document.getElementById('terminal-output');
-    consoleBox.innerHTML = `[COMPILING] Запуск сборщика avr-g++...<br>`;
+// --- РАБОТА С IDE (КОМПИЛЯЦИЯ И СВЯЗЬ) ---
+function compileAndUpload() {
+    const screen = document.getElementById('terminal-screen');
+    screen.innerHTML = `<span style="color: #00e5ff;">[IDE] Инициализация GNU Web-Compiler (target: ARM Cortex-M4)...</span><br>`;
     
     setTimeout(() => {
-        consoleBox.innerHTML += `[COMPILING] Проверка синтаксиса и линковка библиотек...<br>`;
-    }, 600);
+        screen.innerHTML += `[IDE] Компиляция исходных файлов (.cpp)...<br>[IDE] Сборка бинарного образа завершена успешно.<br>`;
+    }, 700);
 
     setTimeout(() => {
-        consoleBox.innerHTML += `<span style="color: #10b981;">[SUCCESS] Компиляция завершена успешно! Скетч использует 4342 байт (14%) памяти. Сброс платы выполнен через порт COM3.</span>`;
-        logTerminal("[ПРОШИВКА] Новый микрокод успешно залит в ядро виртуального робота.");
-    }, 1500);
+        screen.innerHTML += `<span style="color: var(--accent-green);">[SUCCESS] Прошивка загружена в контроллер. Контрольная сумма CRC32: 0xF4B32A1C. Виртуальный стек ядра перезагружен.</span>`;
+        printLog("[SYS] Обновлен управляющий алгоритм робота.");
+    }, 1400);
 }
 
-// Функция вывода логов в системный терминал (общая утилита)
-function logTerminal(message) {
-    const consoleBox = document.getElementById('terminal-output');
-    if(consoleBox) {
-        consoleBox.innerHTML += `<br>${message}`;
-        consoleBox.scrollTop = consoleBox.scrollHeight;
-    }
-}
-
-// Инициализация при загрузке страницы
-window.onload = () => {
-    init3D();
-};
+// Имитация интеграции с реальным оборудованием через Web Serial API
+function connectHardware() {
+    const statusLabel = document.getElementById('com-status');
+    printLog("[HARDWARE] Запрос доступа к последовательному COM-порту...");
+    
+    setTimeout(() => {
+        statusLabel.innerText = "Аппаратная связь: COM4 (115200 бод)";
+        statusLabel.previousElementSibling.className = "dot pulse-green";

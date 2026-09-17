@@ -3,114 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoboCraft OS — Платформа Проектирования и Симуляции</title>
+    <title>RoboStudio IDE & CAD Workspace</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Подключение Three.js для 3D графики -->
+    <!-- Подключаем Three.js и OrbitControls для полноценного управления 3D-камерой мышью -->
     <script src="https://cloudflare.com"></script>
+    <script src="https://jsdelivr.net"></script>
 </head>
 <body>
-    <header class="app-header">
-        <div class="logo">🤖 RoboCraft <span>OS</span></div>
-        <nav class="main-nav">
-            <button class="nav-btn active" data-tab="simulation">3D Сборка и Симуляция</button>
-            <button class="nav-btn" data-tab="ide">Редактор Кода (IDE)</button>
-            <button class="nav-btn" data-tab="telemetry">Телеметрия</button>
-        </nav>
-        <div class="status-bar">Статус: <span class="status-online">Готов к работе</span></div>
+    <!-- Верхняя панель управления (Topbar) -->
+    <header class="topbar">
+        <div class="brand">
+            <span class="icon">⚙️</span>
+            <h1>RoboStudio <span class="version">v2.4.0-pro</span></h1>
+        </div>
+        <div class="system-status">
+            <div class="indicator-group">
+                <span class="dot pulse-green"></span>
+                <span class="label">Ядро симулятора: OK</span>
+            </div>
+            <div class="indicator-group">
+                <span class="dot grey"></span>
+                <span class="label" id="com-status">Аппаратная связь: Отключена</span>
+            </div>
+        </div>
+        <div class="topbar-actions">
+            <button class="btn btn-primary" onclick="connectHardware()">🔗 Подключить контроллер (WebSerial)</button>
+        </div>
     </header>
 
-    <main class="app-container">
-        <!-- ТАБ 1: 3D СБОРКА И СИМУЛЯЦИЯ -->
-        <section id="simulation" class="tab-content active">
-            <div class="workspace">
-                <div class="sidebar">
-                    <h3>Компоненты робота</h3>
-                    <p class="hint">Нажмите на деталь, чтобы добавить ее на рабочую область</p>
-                    <div class="component-list">
-                        <button class="comp-item" onclick="addPart('chassis')">🏎️ Базовое шасси</button>
-                        <button class="comp-item" onclick="addPart('sensor')">👁️ Ультразвуковой датчик</button>
-                        <button class="comp-item" onclick="addPart('wheel')">⭕ Колесо повышенной проходимости</button>
-                        <button class="comp-item" onclick="addPart('manipulator')">🦾 Механический захват</button>
-                    </div>
-                    <div class="controls-panel">
-                        <h3>Управление сценой</h3>
-                        <button class="action-btn trigger-test" onclick="startSimulation()">▶️ Запустить симуляцию</button>
-                        <button class="action-btn reset-btn" onclick="resetScene()">🗑️ Очистить сцену</button>
-                    </div>
+    <!-- Основное рабочее пространство (Grid Layout) -->
+    <div class="workspace-grid">
+        
+        <!-- Левая панель: CAD-компоненты и Дерево сборки -->
+        <aside class="panel left-panel">
+            <div class="panel-header">Дерево компонентов (CAD)</div>
+            <div class="panel-body">
+                <div class="section-title">Добавить узел в сборку</div>
+                <div class="cad-buttons">
+                    <button class="cad-btn" onclick="spawnPart('chassis')">
+                        <span class="btn-icon">🔲</span>
+                        <div class="btn-text">
+                            <strong>Рама алюминиевая</strong>
+                            <span>Профиль 20х20, Вес: 0.8кг</span>
+                        </div>
+                    </button>
+                    <button class="cad-btn" onclick="spawnPart('wheel')">
+                        <span class="btn-icon">⭕</span>
+                        <div class="btn-text">
+                            <strong>Мотор-колесо</strong>
+                            <span>Диаметр 85мм, Энкодер</span>
+                        </div>
+                    </button>
+                    <button class="cad-btn" onclick="spawnPart('lidar')">
+                        <span class="btn-icon">🔄</span>
+                        <div class="btn-text">
+                            <strong>Лидар (LiDAR)</strong>
+                            <span>360 градусов, 12м радиус</span>
+                        </div>
+                    </button>
+                    <button class="cad-btn" onclick="spawnPart('arm')">
+                        <span class="btn-icon">🦾</span>
+                        <div class="btn-text">
+                            <strong>Манипулятор</strong>
+                            <span>3 степени свободы (DoF)</span>
+                        </div>
+                    </button>
                 </div>
-                <div class="viewport-wrapper">
-                    <div id="canvas-container"></div>
-                    <div class="viewport-overlay">
-                        <span>Камера: Свободное вращение (Мышь)</span>
-                    </div>
+
+                <div class="section-title" style="margin-top: 20px;">Текущий состав системы</div>
+                <ul class="assembly-tree" id="assembly-tree">
+                    <li class="tree-root">📦 Робот_Сборка_1</li>
+                    <!-- Сюда скрипт будет добавлять установленные модули -->
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Центральная панель: 3D Вьювер симуляции -->
+        <section class="panel center-panel">
+            <div class="panel-header m-flex">
+                <span>3D Симуляция Среды и Кинематики</span>
+                <div class="view-controls">
+                    <button class="control-toggle active" id="sim-toggle-btn" onclick="toggleSimulation()">▶ Запустить физику</button>
+                    <button class="control-toggle" onclick="clearScene()">🗑 Сбросить сцену</button>
+                </div>
+            </div>
+            <div class="view-viewport" id="viewport-3d">
+                <!-- Сюда Three.js инжектирует Canvas -->
+                <div class="canvas-help-overlay">
+                    ЛКМ: Вращение | ПКМ: Панорама | Скролл: Зум
                 </div>
             </div>
         </section>
 
-        <!-- ТАБ 2: РЕДАКТОР КОДА -->
-        <section id="ide" class="tab-content">
-            <div class="ide-container">
-                <div class="ide-sidebar">
-                    <h3>Файлы проекта</h3>
-                    <ul class="file-tree">
-                        <li class="active">📄 main.ino</li>
-                        <li>📄 config.h</li>
-                        <li>📄 kinematics.cpp</li>
-                    </ul>
+        <!-- Правая панель: IDE Редактор прошивки и Телеметрия -->
+        <aside class="panel right-panel">
+            <div class="panel-header">IDE и Среда Разработки</div>
+            <div class="panel-body ide-body">
+                <div class="ide-controls">
+                    <span class="file-name">📝 firmware_core.cpp</span>
+                    <button class="btn btn-success btn-small" onclick="compileAndUpload()">⚡ Прошить через компилятор</button>
                 </div>
-                <div class="code-area">
-                    <div class="ide-header">
-                        <span>Редактор: main.ino (C++ / Arduino)</span>
-                        <button class="compile-btn" onclick="compileCode()">⚡ Компилировать и Прошить</button>
+                
+                <div class="editor-wrapper">
+                    <!-- Имитация полноценной IDE с нумерацией строк -->
+                    <div class="line-numbers">
+                        <div>1</div><div>2</div><div>3</div><div>4</div><div>5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div><div>11</div><div>12</div><div>13</div><div>14</div>
                     </div>
-                    <textarea id="code-editor" spellcheck="false">// RoboCraft OS v1.0 - Прошивка робота
-#include <Wire.h>
+                    <textarea class="code-editor" id="code-editor" spellcheck="false">#include <RoboKinematics.h>
+
+// Инициализация портов драйверов двигателей
+MotorController motors(D2, D3, D4, D5);
+LidarSensor lidar(Serial1);
 
 void setup() {
-  Serial.begin(111200);
-  pinMode(LED_BUILTIN, OUTPUT);
-  Serial.println("Система инициализирована.");
+    System::initCore();
+    motors.setSpeedLimit(80); // % от макс. мощности
 }
 
 void loop() {
-  // Алгоритм обхода препятствий
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(500);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(500);
+    float distance = lidar.getMinDistanceForward();
+    
+    if (distance < 30.0) { // Дистанция в см
+        motors.executeManeuver(BACKWARD_LEFT, 500);
+    } else {
+        motors.moveForward(100);
+    }
 }</textarea>
-                    <div class="terminal">
-                        <div class="terminal-header">Консоль вывода</div>
-                        <div id="terminal-output" class="terminal-body">
-                            [INFO] Система ожидает компиляции...
-                        </div>
+                </div>
+
+                <div class="terminal-zone">
+                    <div class="terminal-title">Вывод компилятора и Отладка (Осциллограф логов)</div>
+                    <div class="terminal-screen" id="terminal-screen">
+                        [SYS] RoboStudio IDE готова к работе.<br>[SYS] Ожидание подключения аппаратных узлов сборки...
                     </div>
                 </div>
             </div>
-        </section>
+        </aside>
+    </div>
 
-        <!-- ТАБ 3: ТЕЛЕМЕТРИЯ -->
-        <section id="telemetry" class="tab-content">
-            <div class="telemetry-grid">
-                <div class="tele-card">
-                    <h3>Заряд батареи</h3>
-                    <div class="gauge-value text-green">94%</div>
-                    <p>Напряжение: 12.6V | Ток: 1.2A</p>
-                </div>
-                <div class="tele-card">
-                    <h3>Показания датчиков</h3>
-                    <div class="sensor-row"><span>Sonar Left:</span> <strong>42 см</strong></div>
-                    <div class="sensor-row"><span>Sonar Right:</span> <strong class="text-red">12 см (Опасно)</strong></div>
-                    <div class="sensor-row"><span>IMU Pitch:</span> <span>1.2°</span></div>
-                </div>
-                <div class="tele-card">
-                    <h3>Нагрузка на моторы</h3>
-                    <div class="motor-bar"><span style="width: 60%">M1: 60%</span></div>
-                    <div class="motor-bar"><span style="width: 55%">M2: 55%</span></div>
-                </div>
-            </div>
-        </section>
-    </main>
+    <!-- Нижняя панель телеметрии (Dashboard) -->
+    <footer class="bottom-telemetry">
+        <div class="tele-item">
+            <span class="tele-label">Напряжение АКБ:</span>
+            <span class="tele-val text-cyan" id="val-battery">14.8 В (Литий)</span>
+        </div>
+        <div class="tele-item">
+            <span class="tele-label">Частота циклов контроллера:</span>
+            <span class="tele-val text-green" id="val-hz">450 Гц</span>
+        </div>
+        <div class="tele-item">
+            <span class="tele-label">Ошибки шины CAN:</span>
+            <span class="tele-val text-red">0</span>
+        </div>
+        <div class="tele-item">
+            <span class="tele-label">Координаты ROS (X, Y, Z):</span>
+            <span class="tele-val" id="val-coords">0.00, 0.00, 0.00</span>
+        </div>
+    </footer>
 
     <script src="script.js"></script>
 </body>
