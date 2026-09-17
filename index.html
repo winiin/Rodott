@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboCraft OS — Платформа Проектирования и Симуляции</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Подключение Three.js для 3D графики -->
+    <script src="https://cloudflare.com"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo">🤖 RoboCraft <span>OS</span></div>
+        <nav class="main-nav">
+            <button class="nav-btn active" data-tab="simulation">3D Сборка и Симуляция</button>
+            <button class="nav-btn" data-tab="ide">Редактор Кода (IDE)</button>
+            <button class="nav-btn" data-tab="telemetry">Телеметрия</button>
+        </nav>
+        <div class="status-bar">Статус: <span class="status-online">Готов к работе</span></div>
+    </header>
+
+    <main class="app-container">
+        <!-- ТАБ 1: 3D СБОРКА И СИМУЛЯЦИЯ -->
+        <section id="simulation" class="tab-content active">
+            <div class="workspace">
+                <div class="sidebar">
+                    <h3>Компоненты робота</h3>
+                    <p class="hint">Нажмите на деталь, чтобы добавить ее на рабочую область</p>
+                    <div class="component-list">
+                        <button class="comp-item" onclick="addPart('chassis')">🏎️ Базовое шасси</button>
+                        <button class="comp-item" onclick="addPart('sensor')">👁️ Ультразвуковой датчик</button>
+                        <button class="comp-item" onclick="addPart('wheel')">⭕ Колесо повышенной проходимости</button>
+                        <button class="comp-item" onclick="addPart('manipulator')">🦾 Механический захват</button>
+                    </div>
+                    <div class="controls-panel">
+                        <h3>Управление сценой</h3>
+                        <button class="action-btn trigger-test" onclick="startSimulation()">▶️ Запустить симуляцию</button>
+                        <button class="action-btn reset-btn" onclick="resetScene()">🗑️ Очистить сцену</button>
+                    </div>
+                </div>
+                <div class="viewport-wrapper">
+                    <div id="canvas-container"></div>
+                    <div class="viewport-overlay">
+                        <span>Камера: Свободное вращение (Мышь)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ТАБ 2: РЕДАКТОР КОДА -->
+        <section id="ide" class="tab-content">
+            <div class="ide-container">
+                <div class="ide-sidebar">
+                    <h3>Файлы проекта</h3>
+                    <ul class="file-tree">
+                        <li class="active">📄 main.ino</li>
+                        <li>📄 config.h</li>
+                        <li>📄 kinematics.cpp</li>
+                    </ul>
+                </div>
+                <div class="code-area">
+                    <div class="ide-header">
+                        <span>Редактор: main.ino (C++ / Arduino)</span>
+                        <button class="compile-btn" onclick="compileCode()">⚡ Компилировать и Прошить</button>
+                    </div>
+                    <textarea id="code-editor" spellcheck="false">// RoboCraft OS v1.0 - Прошивка робота
+#include <Wire.h>
+
+void setup() {
+  Serial.begin(111200);
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.println("Система инициализирована.");
+}
+
+void loop() {
+  // Алгоритм обхода препятствий
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(500);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(500);
+}</textarea>
+                    <div class="terminal">
+                        <div class="terminal-header">Консоль вывода</div>
+                        <div id="terminal-output" class="terminal-body">
+                            [INFO] Система ожидает компиляции...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ТАБ 3: ТЕЛЕМЕТРИЯ -->
+        <section id="telemetry" class="tab-content">
+            <div class="telemetry-grid">
+                <div class="tele-card">
+                    <h3>Заряд батареи</h3>
+                    <div class="gauge-value text-green">94%</div>
+                    <p>Напряжение: 12.6V | Ток: 1.2A</p>
+                </div>
+                <div class="tele-card">
+                    <h3>Показания датчиков</h3>
+                    <div class="sensor-row"><span>Sonar Left:</span> <strong>42 см</strong></div>
+                    <div class="sensor-row"><span>Sonar Right:</span> <strong class="text-red">12 см (Опасно)</strong></div>
+                    <div class="sensor-row"><span>IMU Pitch:</span> <span>1.2°</span></div>
+                </div>
+                <div class="tele-card">
+                    <h3>Нагрузка на моторы</h3>
+                    <div class="motor-bar"><span style="width: 60%">M1: 60%</span></div>
+                    <div class="motor-bar"><span style="width: 55%">M2: 55%</span></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
